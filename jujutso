@@ -1,6 +1,8 @@
 --[[
-    BLACK JACK MENU - COMPLETO E FUNCIONAL
-    - PC: INSERT | Mobile: Botão ☰
+    BLACK JACK MENU - COMPLETO (FLY MOBILE + PC)
+    - Joystick virtual para mobile
+    - Botão ⬆️ para subir
+    - PC: WASD + Espaço
     - Abas: Main, ESP, Aimbot, Misc, Resources, Teams
 ]]--
 
@@ -11,12 +13,7 @@ local cam = workspace.CurrentCamera
 local replicatedStorage = game:GetService("ReplicatedStorage")
 local serverStorage = game:GetService("ServerStorage")
 
--- ================== INTERFACE ==================
-local gui = Instance.new("ScreenGui")
-gui.Name = "BlackJackMenu"
-gui.Parent = game:GetService("CoreGui")
-
--- Botão flutuante
+-- ================== BOTÃO ABRIR MENU ==================
 local openBtn = Instance.new("TextButton")
 openBtn.Size = UDim2.new(0, 50, 0, 50)
 openBtn.Position = UDim2.new(1, -60, 0, 10)
@@ -26,9 +23,15 @@ openBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
 openBtn.Font = Enum.Font.SourceSansBold
 openBtn.TextSize = 28
 openBtn.BorderSizePixel = 0
-openBtn.Parent = gui
+openBtn.ZIndex = 100
+openBtn.Parent = game:GetService("CoreGui")
 
--- Painel principal
+-- ================== MENU PRINCIPAL ==================
+local gui = Instance.new("ScreenGui")
+gui.Name = "BlackJack"
+gui.ResetOnSpawn = false
+gui.Parent = game:GetService("CoreGui")
+
 local menu = Instance.new("Frame")
 menu.Size = UDim2.new(0, 650, 0, 380)
 menu.Position = UDim2.new(0.5, -325, 0.5, -190)
@@ -38,6 +41,7 @@ menu.BorderSizePixel = 2
 menu.Visible = false
 menu.Active = true
 menu.Draggable = true
+menu.ZIndex = 50
 menu.Parent = gui
 
 -- Título
@@ -64,7 +68,7 @@ closeBtn.Font = Enum.Font.SourceSansBold
 closeBtn.TextSize = 13
 closeBtn.BorderSizePixel = 0
 
--- Abas
+-- ================== ABAS ==================
 local tabBar = Instance.new("Frame", menu)
 tabBar.Size = UDim2.new(1, 0, 0, 30)
 tabBar.Position = UDim2.new(0, 0, 0, 28)
@@ -197,38 +201,142 @@ local function slider(parent, y, text, min, max, val, callback)
     end)
 end
 
--- ================== MAIN ==================
+-- ================== FLY (MOBILE + PC) ==================
 local flyOn = false
 local flySpeed = 100
-local bv, bg
+local bv, bg, flyLoop
 
+-- Joystick virtual
+local joystickFrame = Instance.new("Frame")
+joystickFrame.Size = UDim2.new(0, 120, 0, 120)
+joystickFrame.Position = UDim2.new(0, 20, 0.75, -60)
+joystickFrame.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+joystickFrame.BackgroundTransparency = 0.85
+joystickFrame.BorderSizePixel = 0
+joystickFrame.Visible = false
+joystickFrame.ZIndex = 200
+joystickFrame.Parent = game:GetService("CoreGui")
+
+local joystickCenter = Instance.new("Frame")
+joystickCenter.Size = UDim2.new(0, 40, 0, 40)
+joystickCenter.Position = UDim2.new(0.5, -20, 0.5, -20)
+joystickCenter.BackgroundColor3 = Color3.fromRGB(200, 0, 0)
+joystickCenter.BackgroundTransparency = 0.5
+joystickCenter.BorderSizePixel = 0
+joystickCenter.ZIndex = 201
+joystickCenter.Parent = joystickFrame
+
+-- Botão subir
+local upBtn = Instance.new("TextButton")
+upBtn.Size = UDim2.new(0, 60, 0, 60)
+upBtn.Position = UDim2.new(0.85, -30, 0.6, -30)
+upBtn.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+upBtn.BackgroundTransparency = 0.7
+upBtn.Text = "⬆"
+upBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+upBtn.Font = Enum.Font.SourceSansBold
+upBtn.TextSize = 30
+upBtn.BorderSizePixel = 0
+upBtn.Visible = false
+upBtn.ZIndex = 200
+upBtn.Parent = game:GetService("CoreGui")
+
+local joystickActive = false
+local joystickDir = Vector3.zero
+
+local function startFly()
+    local char = player.Character
+    if not char or not char:FindFirstChild("HumanoidRootPart") then return end
+    local root = char.HumanoidRootPart
+    
+    if bv then bv:Destroy() end
+    if bg then bg:Destroy() end
+    if flyLoop then flyLoop:Disconnect() end
+    
+    bv = Instance.new("BodyVelocity", root)
+    bv.MaxForce = Vector3.new(flySpeed * 1000, flySpeed * 1000, flySpeed * 1000)
+    bv.P = 10000
+    bg = Instance.new("BodyGyro", root)
+    bg.MaxTorque = Vector3.new(400000, 400000, 400000)
+    bg.P = 10000
+    
+    flyLoop = runService.Heartbeat:Connect(function()
+        if not flyOn then
+            if bv then bv:Destroy(); bv = nil end
+            if bg then bg:Destroy(); bg = nil end
+            flyLoop:Disconnect(); flyLoop = nil
+            return
+        end
+        if not root or not root.Parent then flyOn = false; return end
+        
+        local cf = cam.CFrame
+        local move = Vector3.zero
+        
+        -- PC
+        if uis:IsKeyDown(Enum.KeyCode.W) then move += cf.LookVector end
+        if uis:IsKeyDown(Enum.KeyCode.S) then move -= cf.LookVector end
+        if uis:IsKeyDown(Enum.KeyCode.A) then move -= cf.RightVector end
+        if uis:IsKeyDown(Enum.KeyCode.D) then move += cf.RightVector end
+        if uis:IsKeyDown(Enum.KeyCode.Space) then move += Vector3.new(0, 1, 0) end
+        
+        -- Mobile joystick
+        if joystickDir.Magnitude > 0 then
+            move += cf.LookVector * joystickDir.Z
+            move += cf.RightVector * joystickDir.X
+        end
+        
+        bv.Velocity = move.Magnitude > 0 and move.Unit * flySpeed or Vector3.zero
+        bg.CFrame = cf
+    end)
+end
+
+joystickFrame.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.Touch then
+        joystickActive = true
+    end
+end)
+
+joystickFrame.InputEnded:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.Touch then
+        joystickActive = false
+        joystickDir = Vector3.zero
+        joystickCenter.Position = UDim2.new(0.5, -20, 0.5, -20)
+    end
+end)
+
+uis.TouchMoved:Connect(function(input, gpe)
+    if joystickActive then
+        local pos = input.Position
+        local fp = joystickFrame.AbsolutePosition
+        local fs = joystickFrame.AbsoluteSize
+        local rx = (pos.X - fp.X) / fs.X - 0.5
+        local ry = (pos.Y - fp.Y) / fs.Y - 0.5
+        local dist = math.sqrt(rx^2 + ry^2)
+        if dist > 0.5 then rx = rx / dist * 0.5; ry = ry / dist * 0.5 end
+        joystickDir = Vector3.new(rx * 2, 0, -ry * 2)
+        joystickCenter.Position = UDim2.new(0.5 + rx, -20, 0.5 + ry, -20)
+    end
+end)
+
+upBtn.MouseButton1Click:Connect(function()
+    if flyOn and bv then
+        bv.Velocity = Vector3.new(0, flySpeed, 0)
+    end
+end)
+
+-- ================== MAIN ==================
 toggle(mainTab, 5, "Fly", function(on)
     flyOn = on
-    if on and player.Character then
-        local root = player.Character:FindFirstChild("HumanoidRootPart")
-        if root then
-            if bv then bv:Destroy() end
-            if bg then bg:Destroy() end
-            bv = Instance.new("BodyVelocity", root)
-            bv.MaxForce = Vector3.new(flySpeed * 1000, flySpeed * 1000, flySpeed * 1000)
-            bv.P = 10000
-            bg = Instance.new("BodyGyro", root)
-            bg.MaxTorque = Vector3.new(400000, 400000, 400000)
-            bg.P = 10000
-            
-            runService.Heartbeat:Connect(function()
-                if not flyOn or not root or not root.Parent then return end
-                local cf = cam.CFrame
-                local move = Vector3.zero
-                if uis:IsKeyDown(Enum.KeyCode.W) then move += cf.LookVector end
-                if uis:IsKeyDown(Enum.KeyCode.S) then move -= cf.LookVector end
-                if uis:IsKeyDown(Enum.KeyCode.A) then move -= cf.RightVector end
-                if uis:IsKeyDown(Enum.KeyCode.D) then move += cf.RightVector end
-                if uis:IsKeyDown(Enum.KeyCode.Space) then move += Vector3.new(0, 1, 0) end
-                if bv then bv.Velocity = move.Magnitude > 0 and move.Unit * flySpeed or Vector3.zero end
-                if bg then bg.CFrame = cf end
-            end)
-        end
+    if on then
+        joystickFrame.Visible = true
+        upBtn.Visible = true
+        startFly()
+    else
+        joystickFrame.Visible = false
+        upBtn.Visible = false
+        if bv then bv:Destroy(); bv = nil end
+        if bg then bg:Destroy(); bg = nil end
+        if flyLoop then flyLoop:Disconnect(); flyLoop = nil end
     end
 end)
 
@@ -240,11 +348,7 @@ end)
 toggle(mainTab, 65, "God Mode", function(on)
     if on and player.Character then
         local h = player.Character:FindFirstChild("Humanoid")
-        if h then
-            h.MaxHealth = math.huge
-            h.Health = math.huge
-            h:SetStateEnabled(Enum.HumanoidStateType.Dead, false)
-        end
+        if h then h.MaxHealth = math.huge; h.Health = math.huge end
     end
 end)
 
@@ -279,9 +383,7 @@ end)
 toggle(mainTab, 185, "Invisible", function(on)
     if player.Character then
         for _, p in ipairs(player.Character:GetDescendants()) do
-            if p:IsA("BasePart") then
-                p.Transparency = on and 1 or 0
-            end
+            if p:IsA("BasePart") then p.Transparency = on and 1 or 0 end
         end
     end
 end)
@@ -302,23 +404,16 @@ toggle(espTab, 5, "Skeleton", function(on)
             for _, plr in ipairs(game:GetService("Players"):GetPlayers()) do
                 if plr ~= player and plr.Character and not plr.Character:FindFirstChild("ESP_HL") then
                     local hl = Instance.new("Highlight", plr.Character)
-                    hl.Name = "ESP_HL"
-                    hl.FillTransparency = 1
-                    hl.OutlineColor = Color3.new(1, 0, 0)
+                    hl.Name = "ESP_HL"; hl.FillTransparency = 1; hl.OutlineColor = Color3.new(1, 0, 0)
                     table.insert(espObjects, hl)
                 end
             end
         end)
     else
-        for _, obj in ipairs(espObjects) do
-            if obj and obj.Parent then obj:Destroy() end
-        end
+        for _, obj in ipairs(espObjects) do if obj and obj.Parent then obj:Destroy() end end
         espObjects = {}
         for _, plr in ipairs(game:GetService("Players"):GetPlayers()) do
-            if plr.Character then
-                local hl = plr.Character:FindFirstChild("ESP_HL")
-                if hl then hl:Destroy() end
-            end
+            if plr.Character then local hl = plr.Character:FindFirstChild("ESP_HL"); if hl then hl:Destroy() end end
         end
     end
 end)
@@ -331,30 +426,20 @@ toggle(espTab, 35, "Name", function(on)
                     local head = plr.Character.Head
                     if not head:FindFirstChild("ESP_N") then
                         local bg = Instance.new("BillboardGui", head)
-                        bg.Name = "ESP_N"
-                        bg.Size = UDim2.new(0, 100, 0, 20)
-                        bg.StudsOffset = Vector3.new(0, 2.5, 0)
-                        bg.AlwaysOnTop = true
+                        bg.Name = "ESP_N"; bg.Size = UDim2.new(0, 100, 0, 20); bg.StudsOffset = Vector3.new(0, 2.5, 0); bg.AlwaysOnTop = true
                         local txt = Instance.new("TextLabel", bg)
-                        txt.Text = plr.Name
-                        txt.TextColor3 = Color3.new(1, 1, 1)
-                        txt.BackgroundTransparency = 1
-                        txt.Font = Enum.Font.SourceSans
-                        txt.TextSize = 11
+                        txt.Text = plr.Name; txt.TextColor3 = Color3.new(1, 1, 1); txt.BackgroundTransparency = 1; txt.Font = Enum.Font.SourceSans; txt.TextSize = 11
                         table.insert(espObjects, bg)
                     end
                 end
             end
         end)
     else
-        for _, obj in ipairs(espObjects) do
-            if obj and obj.Parent then obj:Destroy() end
-        end
+        for _, obj in ipairs(espObjects) do if obj and obj.Parent then obj:Destroy() end end
         espObjects = {}
         for _, plr in ipairs(game:GetService("Players"):GetPlayers()) do
             if plr.Character and plr.Character:FindFirstChild("Head") then
-                local bg = plr.Character.Head:FindFirstChild("ESP_N")
-                if bg then bg:Destroy() end
+                local bg = plr.Character.Head:FindFirstChild("ESP_N"); if bg then bg:Destroy() end
             end
         end
     end
@@ -363,28 +448,20 @@ end)
 espTab.CanvasSize = UDim2.new(0, 0, 0, 65)
 
 -- ================== AIMBOT ==================
-local aimOn = false
-local aimSmooth = 0.3
-
+local aimOn = false; local aimSmooth = 0.3
 toggle(aimTab, 5, "Aimbot", function(on) aimOn = on end)
 slider(aimTab, 35, "Suavidade", 0.1, 1, 0.3, function(v) aimSmooth = v end)
 
 runService.Heartbeat:Connect(function()
     if not aimOn or not player.Character then return end
-    local target = nil
-    local minDist = math.huge
+    local target = nil; local minDist = math.huge
     for _, plr in ipairs(game:GetService("Players"):GetPlayers()) do
         if plr ~= player and plr.Character and plr.Character:FindFirstChild("Head") then
             local dist = (cam.CFrame.Position - plr.Character.Head.Position).Magnitude
-            if dist < minDist then
-                minDist = dist
-                target = plr.Character.Head
-            end
+            if dist < minDist then minDist = dist; target = plr.Character.Head end
         end
     end
-    if target then
-        cam.CFrame = cam.CFrame:Lerp(CFrame.new(cam.CFrame.Position, target.Position), aimSmooth)
-    end
+    if target then cam.CFrame = cam.CFrame:Lerp(CFrame.new(cam.CFrame.Position, target.Position), aimSmooth) end
 end)
 
 aimTab.CanvasSize = UDim2.new(0, 0, 0, 65)
@@ -410,69 +487,26 @@ miscTab.CanvasSize = UDim2.new(0, 0, 0, 65)
 
 -- ================== RESOURCES ==================
 local resRefresh = Instance.new("TextButton", resTab)
-resRefresh.Size = UDim2.new(1, -10, 0, 24)
-resRefresh.Position = UDim2.new(0, 5, 0, 5)
-resRefresh.BackgroundColor3 = Color3.fromRGB(150, 0, 0)
-resRefresh.Text = "Atualizar Armas"
-resRefresh.TextColor3 = Color3.fromRGB(255, 255, 255)
-resRefresh.Font = Enum.Font.SourceSansBold
-resRefresh.TextSize = 11
-resRefresh.BorderSizePixel = 0
+resRefresh.Size = UDim2.new(1, -10, 0, 24); resRefresh.Position = UDim2.new(0, 5, 0, 5)
+resRefresh.BackgroundColor3 = Color3.fromRGB(150, 0, 0); resRefresh.Text = "Atualizar Armas"
+resRefresh.TextColor3 = Color3.fromRGB(255, 255, 255); resRefresh.Font = Enum.Font.SourceSansBold; resRefresh.TextSize = 11
 
 local resList = Instance.new("ScrollingFrame", resTab)
-resList.Size = UDim2.new(1, -10, 1, -35)
-resList.Position = UDim2.new(0, 5, 0, 32)
-resList.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-resList.CanvasSize = UDim2.new(0, 0, 0, 0)
-resList.ScrollBarThickness = 3
-
-local resLayout = Instance.new("UIListLayout", resList)
-resLayout.Padding = UDim.new(0, 2)
+resList.Size = UDim2.new(1, -10, 1, -35); resList.Position = UDim2.new(0, 5, 0, 32)
+resList.BackgroundColor3 = Color3.fromRGB(30, 30, 30); resList.CanvasSize = UDim2.new(0, 0, 0, 0)
+local resLayout = Instance.new("UIListLayout", resList); resLayout.Padding = UDim.new(0, 2)
 
 resRefresh.MouseButton1Click:Connect(function()
-    for _, c in ipairs(resList:GetChildren()) do
-        if c:IsA("Frame") then c:Destroy() end
-    end
-    
+    for _, c in ipairs(resList:GetChildren()) do if c:IsA("Frame") then c:Destroy() end end
     local weapons = {}
-    for _, obj in ipairs(serverStorage:GetDescendants()) do
-        if obj:IsA("Tool") then weapons[obj.Name] = obj end
-    end
-    for _, obj in ipairs(replicatedStorage:GetDescendants()) do
-        if obj:IsA("Tool") then weapons[obj.Name] = obj end
-    end
-    
+    for _, obj in ipairs(serverStorage:GetDescendants()) do if obj:IsA("Tool") then weapons[obj.Name] = obj end end
+    for _, obj in ipairs(replicatedStorage:GetDescendants()) do if obj:IsA("Tool") then weapons[obj.Name] = obj end end
     local y = 0
     for name, tool in pairs(weapons) do
-        local f = Instance.new("Frame", resList)
-        f.Size = UDim2.new(1, -8, 0, 24)
-        f.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
-        
-        local lbl = Instance.new("TextLabel", f)
-        lbl.Size = UDim2.new(0.5, 0, 1, 0)
-        lbl.BackgroundTransparency = 1
-        lbl.Text = name
-        lbl.TextColor3 = Color3.fromRGB(255, 255, 255)
-        lbl.Font = Enum.Font.SourceSans
-        lbl.TextSize = 10
-        lbl.TextXAlignment = Enum.TextXAlignment.Left
-        
-        local btn = Instance.new("TextButton", f)
-        btn.Size = UDim2.new(0.5, -4, 1, -4)
-        btn.Position = UDim2.new(0.5, 2, 0, 2)
-        btn.BackgroundColor3 = Color3.fromRGB(150, 0, 0)
-        btn.Text = "Puxar"
-        btn.TextColor3 = Color3.fromRGB(255, 255, 255)
-        btn.Font = Enum.Font.SourceSansBold
-        btn.TextSize = 10
-        btn.MouseButton1Click:Connect(function()
-            local clone = tool:Clone()
-            clone.Parent = player.Backpack
-            btn.Text = "✓"
-            task.wait(0.5)
-            btn.Text = "Puxar"
-        end)
-        
+        local f = Instance.new("Frame", resList); f.Size = UDim2.new(1, -8, 0, 24); f.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+        local lbl = Instance.new("TextLabel", f); lbl.Size = UDim2.new(0.5, 0, 1, 0); lbl.BackgroundTransparency = 1; lbl.Text = name; lbl.TextColor3 = Color3.fromRGB(255, 255, 255); lbl.Font = Enum.Font.SourceSans; lbl.TextSize = 10
+        local btn = Instance.new("TextButton", f); btn.Size = UDim2.new(0.5, -4, 1, -4); btn.Position = UDim2.new(0.5, 2, 0, 2); btn.BackgroundColor3 = Color3.fromRGB(150, 0, 0); btn.Text = "Puxar"; btn.TextColor3 = Color3.fromRGB(255, 255, 255); btn.Font = Enum.Font.SourceSansBold; btn.TextSize = 10
+        btn.MouseButton1Click:Connect(function() local clone = tool:Clone(); clone.Parent = player.Backpack; btn.Text = "✓"; task.wait(0.5); btn.Text = "Puxar" end)
         y += 26
     end
     resList.CanvasSize = UDim2.new(0, 0, 0, y)
@@ -480,84 +514,38 @@ end)
 
 -- ================== TEAMS ==================
 local teamRefresh = Instance.new("TextButton", teamTab)
-teamRefresh.Size = UDim2.new(1, -10, 0, 24)
-teamRefresh.Position = UDim2.new(0, 5, 0, 5)
-teamRefresh.BackgroundColor3 = Color3.fromRGB(150, 0, 0)
-teamRefresh.Text = "Atualizar Times"
-teamRefresh.TextColor3 = Color3.fromRGB(255, 255, 255)
-teamRefresh.Font = Enum.Font.SourceSansBold
-teamRefresh.TextSize = 11
-teamRefresh.BorderSizePixel = 0
+teamRefresh.Size = UDim2.new(1, -10, 0, 24); teamRefresh.Position = UDim2.new(0, 5, 0, 5)
+teamRefresh.BackgroundColor3 = Color3.fromRGB(150, 0, 0); teamRefresh.Text = "Atualizar Times"
+teamRefresh.TextColor3 = Color3.fromRGB(255, 255, 255); teamRefresh.Font = Enum.Font.SourceSansBold; teamRefresh.TextSize = 11
 
 local teamList = Instance.new("ScrollingFrame", teamTab)
-teamList.Size = UDim2.new(1, -10, 1, -35)
-teamList.Position = UDim2.new(0, 5, 0, 32)
-teamList.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-teamList.CanvasSize = UDim2.new(0, 0, 0, 0)
-teamList.ScrollBarThickness = 3
-
-local teamLayout = Instance.new("UIListLayout", teamList)
-teamLayout.Padding = UDim.new(0, 2)
+teamList.Size = UDim2.new(1, -10, 1, -35); teamList.Position = UDim2.new(0, 5, 0, 32)
+teamList.BackgroundColor3 = Color3.fromRGB(30, 30, 30); teamList.CanvasSize = UDim2.new(0, 0, 0, 0)
+local teamLayout = Instance.new("UIListLayout", teamList); teamLayout.Padding = UDim.new(0, 2)
 
 teamRefresh.MouseButton1Click:Connect(function()
-    for _, c in ipairs(teamList:GetChildren()) do
-        if c:IsA("Frame") then c:Destroy() end
-    end
-    
-    local teams = game:GetService("Teams"):GetTeams()
-    local y = 0
+    for _, c in ipairs(teamList:GetChildren()) do if c:IsA("Frame") then c:Destroy() end end
+    local teams = game:GetService("Teams"):GetTeams(); local y = 0
     for _, team in ipairs(teams) do
         if not team:IsA("Team") then continue end
-        
-        local f = Instance.new("Frame", teamList)
-        f.Size = UDim2.new(1, -8, 0, 24)
-        f.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
-        
-        local lbl = Instance.new("TextLabel", f)
-        lbl.Size = UDim2.new(0.5, 0, 1, 0)
-        lbl.BackgroundTransparency = 1
-        lbl.Text = team.Name
-        lbl.TextColor3 = Color3.fromRGB(255, 255, 255)
-        lbl.Font = Enum.Font.SourceSans
-        lbl.TextSize = 10
-        lbl.TextXAlignment = Enum.TextXAlignment.Left
-        
-        local btn = Instance.new("TextButton", f)
-        btn.Size = UDim2.new(0.5, -4, 1, -4)
-        btn.Position = UDim2.new(0.5, 2, 0, 2)
-        btn.BackgroundColor3 = Color3.fromRGB(150, 0, 0)
-        btn.Text = "Entrar"
-        btn.TextColor3 = Color3.fromRGB(255, 255, 255)
-        btn.Font = Enum.Font.SourceSansBold
-        btn.TextSize = 10
-        btn.MouseButton1Click:Connect(function()
-            pcall(function() player.Team = team end)
-            if player.Character then player.Character:BreakJoints() end
-            btn.Text = "✓"
-            task.wait(0.5)
-            btn.Text = "Entrar"
-        end)
-        
+        local f = Instance.new("Frame", teamList); f.Size = UDim2.new(1, -8, 0, 24); f.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+        local lbl = Instance.new("TextLabel", f); lbl.Size = UDim2.new(0.5, 0, 1, 0); lbl.BackgroundTransparency = 1; lbl.Text = team.Name; lbl.TextColor3 = Color3.fromRGB(255, 255, 255); lbl.Font = Enum.Font.SourceSans; lbl.TextSize = 10
+        local btn = Instance.new("TextButton", f); btn.Size = UDim2.new(0.5, -4, 1, -4); btn.Position = UDim2.new(0.5, 2, 0, 2); btn.BackgroundColor3 = Color3.fromRGB(150, 0, 0); btn.Text = "Entrar"; btn.TextColor3 = Color3.fromRGB(255, 255, 255); btn.Font = Enum.Font.SourceSansBold; btn.TextSize = 10
+        btn.MouseButton1Click:Connect(function() pcall(function() player.Team = team end); if player.Character then player.Character:BreakJoints() end; btn.Text = "✓"; task.wait(0.5); btn.Text = "Entrar" end)
         y += 26
     end
     teamList.CanvasSize = UDim2.new(0, 0, 0, y)
 end)
 
 -- ================== CONTROLES ==================
-openBtn.MouseButton1Click:Connect(function()
-    menu.Visible = not menu.Visible
-end)
-
-closeBtn.MouseButton1Click:Connect(function()
-    menu.Visible = false
-end)
+openBtn.MouseButton1Click:Connect(function() menu.Visible = not menu.Visible end)
+closeBtn.MouseButton1Click:Connect(function() menu.Visible = false end)
 
 uis.InputBegan:Connect(function(input, gpe)
     if gpe then return end
-    if input.KeyCode == Enum.KeyCode.Insert then
-        menu.Visible = not menu.Visible
-    end
+    if input.KeyCode == Enum.KeyCode.Insert then menu.Visible = not menu.Visible end
 end)
 
 print("✅ BLACK JACK MENU COMPLETO CARREGADO!")
-print("📌 PC: INSERT | Mobile: Botão ☰ vermelho no canto superior direito")
+print("📌 PC: INSERT | Mobile: ☰")
+print("🕹️ Fly: Joystick virtual + botão ⬆ no mobile")
